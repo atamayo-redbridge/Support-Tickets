@@ -1,154 +1,97 @@
-import datetime
-import random
-import os
-import shutil
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import sqlite3
+import bcrypt
+from backend import get_user, update_password, create_user
 
-# Set app title and layout
-st.set_page_config(page_title="IT Support Ticketing System", page_icon="🎫", layout="wide")
+# Set Page Title & Layout
+st.set_page_config(page_title="IT Ticketing System", page_icon="🎫", layout="wide")
 
-# Ensure upload directory exists
-UPLOAD_FOLDER = "uploads"
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
+# Authentication State
+if "logged_in" not in st.session_state:
+    st.session_state["logged_in"] = False
+    st.session_state["email"] = None
+    st.session_state["role"] = None
 
-# Page Title
-st.title("🎫 IT Support Ticketing System")
-st.write("Easily track, manage, and resolve IT-related issues in one place!")
+# 🔹 LOGIN FORM
+def login():
+    st.sidebar.title("🔐 Login")
+    email = st.sidebar.text_input("📧 Email")
+    password = st.sidebar.text_input("🔑 Password", type="password")
+    login_button = st.sidebar.button("Login")
 
-# Initialize Ticket Data in Session
-if "df" not in st.session_state:
-    np.random.seed(42)
+    if login_button:
+        user = get_user(email)
+        if user and bcrypt.checkpw(password.encode(), user[4].encode()):
+            st.session_state["logged_in"] = True
+            st.session_state["email"] = email
+            st.session_state["role"] = user[5]  # Role
+            st.session_state["must_reset"] = user[6]  # Password Reset Required
+            st.experimental_rerun()
+        else:
+            st.sidebar.error("Invalid email or password")
 
-    issue_descriptions = [
-        "Network connectivity issues", "Software crash on startup", "Printer not responding",
-        "Email server downtime", "Data backup failure", "Login authentication problems",
-        "Website performance slow", "Security vulnerability identified", "Hardware failure",
-        "Employee unable to access shared files", "Database connection failure",
-        "Mobile app sync issues", "VoIP phone system problems", "VPN connection issues",
-        "System updates causing errors", "File server low on storage",
-        "Intrusion detection system alerts", "Inventory system errors", 
-        "Customer data not loading in CRM", "Collaboration tool notifications failing"
-    ]
+# 🔹 PASSWORD RESET FORM
+def password_reset():
+    st.subheader("🔄 Reset Your Password")
+    new_password = st.text_input("🔑 Enter New Password", type="password")
+    confirm_password = st.text_input("🔑 Confirm New Password", type="password")
+    reset_button = st.button("Reset Password")
 
-    data = {
-        "ID": [f"TICKET-{i}" for i in range(1100, 1000, -1)],
-        "Issue": np.random.choice(issue_descriptions, size=100),
-        "Status": np.random.choice(["Open", "In Progress", "Closed"], size=100),
-        "Priority": np.random.choice(["High", "Medium", "Low"], size=100),
-        "Date Submitted": [datetime.date(2023, 6, 1) + datetime.timedelta(days=random.randint(0, 182)) for _ in range(100)],
-        "Attachment": [None] * 100  # Placeholder for file attachments
-    }
-    df = pd.DataFrame(data)
-    st.session_state.df = df
+    if reset_button:
+        if new_password == confirm_password:
+            update_password(st.session_state["email"], new_password)
+            st.success("✅ Password Reset Successful! Please Login Again.")
+            st.session_state["logged_in"] = False
+            st.experimental_rerun()
+        else:
+            st.error("Passwords do not match!")
 
-# 📌 Sidebar Navigation
-st.sidebar.image("https://img.icons8.com/ios-filled/50/000000/ticket.png", width=50)
-menu = st.sidebar.radio("Navigation", ["📬 Dashboard", "📩 Submit Ticket", "📋 View Tickets"])
+# 🔹 DASHBOARD BASED ON ROLE
+def dashboard():
+    st.sidebar.title("🎫 IT Ticketing System")
 
-# 🔹 Dashboard
-if menu == "📬 Dashboard":
-    st.header("📊 IT Ticket Statistics")
-    
-    col1, col2, col3 = st.columns(3)
+    if st.session_state["role"] == "admin":
+        menu = st.sidebar.radio("Navigation", ["📩 Create User", "📋 Manage Tickets", "📊 Admin Dashboard"])
 
-    num_open_tickets = len(st.session_state.df[st.session_state.df.Status == "Open"])
-    num_in_progress = len(st.session_state.df[st.session_state.df.Status == "In Progress"])
-    num_closed = len(st.session_state.df[st.session_state.df.Status == "Closed"])
+        if menu == "📩 Create User":
+            st.header("👤 Create a New User")
+            first_name = st.text_input("First Name")
+            last_name = st.text_input("Last Name")
+            email = st.text_input("Email")
+            role = st.selectbox("Role", ["user", "co-admin", "admin"])
 
-    col1.metric(label="🟢 Open Tickets", value=num_open_tickets)
-    col2.metric(label="🟡 In Progress", value=num_in_progress)
-    col3.metric(label="🔴 Closed", value=num_closed)
-
-    # 📊 Ticket Status Chart
-    st.write("##### 📅 Ticket Status Over Time")
-    status_chart = (
-        alt.Chart(st.session_state.df)
-        .mark_bar()
-        .encode(
-            x="month(Date Submitted):O",
-            y="count():Q",
-            color="Status:N"
-        )
-        .configure_legend(orient="bottom", titleFontSize=14, labelFontSize=14)
-    )
-    st.altair_chart(status_chart, use_container_width=True, theme="streamlit")
-
-    # 📊 Priority Distribution
-    st.write("##### 🔥 Ticket Priority Breakdown")
-    priority_chart = (
-        alt.Chart(st.session_state.df)
-        .mark_arc()
-        .encode(theta="count():Q", color="Priority:N")
-        .properties(height=300)
-        .configure_legend(orient="bottom", titleFontSize=14, labelFontSize=14)
-    )
-    st.altair_chart(priority_chart, use_container_width=True, theme="streamlit")
-
-# 🔹 Submit Ticket (With File Attachments)
-elif menu == "📩 Submit Ticket":
-    st.header("📩 Submit a New Ticket")
-    
-    with st.form("add_ticket_form"):
-        issue = st.text_area("📝 Describe the issue", placeholder="Enter detailed issue description...")
-        priority = st.selectbox("⚠️ Priority Level", ["High", "Medium", "Low"])
-        uploaded_file = st.file_uploader("📎 Attach a file (optional)", type=["png", "jpg", "pdf", "txt", "log"])
-        submitted = st.form_submit_button("🎟 Submit Ticket")
-    
-    if submitted:
-        new_ticket_id = f"TICKET-{int(max(st.session_state.df.ID).split('-')[1]) + 1}"
-        today = datetime.datetime.now().strftime("%Y-%m-%d")
-        file_path = None
-
-        if uploaded_file:
-            file_path = os.path.join(UPLOAD_FOLDER, uploaded_file.name)
-            with open(file_path, "wb") as f:
-                f.write(uploaded_file.read())
+            if st.button("Create User"):
+                result = create_user(first_name, last_name, email, role)
+                st.success(f"✅ {result['message']} Default Password: `{result['password']}`")
         
-        df_new = pd.DataFrame([{
-            "ID": new_ticket_id,
-            "Issue": issue,
-            "Status": "Open",
-            "Priority": priority,
-            "Date Submitted": today,
-            "Attachment": file_path if uploaded_file else None
-        }])
+        elif menu == "📋 Manage Tickets":
+            st.header("📋 View & Manage All Tickets")
+            st.write("🔹 **Admin can see & update all tickets here...**")
+            # Add ticket management functionalities...
 
-        st.session_state.df = pd.concat([df_new, st.session_state.df], axis=0)
-        st.success(f"✅ Ticket {new_ticket_id} created successfully!")
+        elif menu == "📊 Admin Dashboard":
+            st.header("📊 Ticket Statistics & Overview")
+            # Add dashboard metrics...
 
-# 🔹 View & Manage Tickets (With Attachments)
-elif menu == "📋 View Tickets":
-    st.header("📋 All Support Tickets")
+    elif st.session_state["role"] == "co-admin":
+        st.header("🛠️ Co-Admin Ticket Dashboard")
+        st.write("🔹 **Co-Admins can manage certain tickets...**")
+        # Co-Admin functionalities...
 
-    # Ticket Filters
-    col1, col2, col3 = st.columns(3)
-    
-    search_term = col1.text_input("🔍 Search by Issue", "")
-    status_filter = col2.selectbox("📌 Filter by Status", ["All", "Open", "In Progress", "Closed"])
-    priority_filter = col3.selectbox("⚠️ Filter by Priority", ["All", "High", "Medium", "Low"])
+    else:
+        st.header("🎟 My Tickets")
+        st.write("🔹 **View and manage your own tickets...**")
+        # User-specific functionalities...
 
-    filtered_df = st.session_state.df
+    st.sidebar.button("Logout", on_click=lambda: st.session_state.update({"logged_in": False, "email": None, "role": None}))
+    st.experimental_rerun()
 
-    if search_term:
-        filtered_df = filtered_df[filtered_df["Issue"].str.contains(search_term, case=False, na=False)]
-    if status_filter != "All":
-        filtered_df = filtered_df[filtered_df["Status"] == status_filter]
-    if priority_filter != "All":
-        filtered_df = filtered_df[filtered_df["Priority"] == priority_filter]
-
-    # Editable Ticket Table with Attachment Links
-    for index, row in filtered_df.iterrows():
-        with st.expander(f"🎫 {row['ID']} - {row['Issue']}"):
-            st.write(f"📅 **Submitted:** {row['Date Submitted']}")
-            st.write(f"⚠️ **Priority:** {row['Priority']}")
-            st.write(f"🔄 **Status:** {row['Status']}")
-            if row["Attachment"]:
-                st.write(f"📎 **Attachment:** [{os.path.basename(row['Attachment'])}](uploads/{os.path.basename(row['Attachment'])})")
-            st.markdown("---")
-
-st.sidebar.markdown("---")
-st.sidebar.caption("🚀 Powered by Redbridge IT Group")
+# 🔹 AUTHENTICATION LOGIC
+if not st.session_state["logged_in"]:
+    login()
+else:
+    if st.session_state["must_reset"] == 1:
+        password_reset()
+    else:
+        dashboard()
