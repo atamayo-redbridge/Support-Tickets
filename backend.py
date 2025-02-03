@@ -64,3 +64,22 @@ def update_password(email, new_password):
     cursor.execute("UPDATE users SET password = ?, must_reset_password = 0 WHERE email = ?", (hashed_password, email))
     conn.commit()
     return {"message": "Password updated successfully!"}
+
+# Ensure Default Admin Exists
+def create_default_admin():
+    admin_email = "admin@example.com"
+    admin_password = "Admin123!"  # Default Password
+    hashed_password = hash_password(admin_password)
+
+    cursor.execute("SELECT * FROM users WHERE email = ?", (admin_email,))
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO users (first_name, last_name, email, password, role, must_reset_password) VALUES (?, ?, ?, ?, ?, ?)",
+            ("Admin", "User", admin_email, hashed_password, "admin", 0),
+        )
+        conn.commit()
+        print(f"✅ Default Admin Created: {admin_email} | Password: {admin_password}")
+
+# Run Admin Creation Check
+create_default_admin()
+
