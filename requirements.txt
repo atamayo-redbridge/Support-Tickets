@@ -3,3 +3,8 @@ pandas
 numpy
 altair
 watchdog
+streamlit-authenticator
+bcrypt
+sqlalchemy
+passlib
+
