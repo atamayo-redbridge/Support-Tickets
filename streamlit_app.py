@@ -11,6 +11,7 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["email"] = None
     st.session_state["role"] = None
+    st.session_state["must_reset"] = None  # Track password reset state
 
 # 🔹 CENTERED LOGIN FORM
 def login():
@@ -23,10 +24,6 @@ def login():
         st.markdown(
             """
             <style>
-                div[data-testid="stHorizontalBlock"] { 
-                    justify-content: center; 
-                    align-items: center; 
-                }
                 div[data-testid="stBlockContainer"] {
                     display: flex;
                     flex-direction: column;
@@ -44,11 +41,12 @@ def login():
         if login_button:
             user = get_user(email)
             if user and bcrypt.checkpw(password.encode(), user[4].encode()):
+                # Update session state **before** rerunning
                 st.session_state["logged_in"] = True
                 st.session_state["email"] = email
                 st.session_state["role"] = user[5]  # Role
                 st.session_state["must_reset"] = user[6]  # Password Reset Required
-                st.experimental_rerun()
+                st.rerun()  # **Safe rerun**
             else:
                 st.error("❌ Invalid email or password")
 
@@ -65,8 +63,8 @@ def password_reset():
         if new_password == confirm_password:
             update_password(email, new_password)
             st.success("✅ Password Reset Successful! Please Login Again.")
-            st.session_state["logged_in"] = False
-            st.experimental_rerun()
+            st.session_state["logged_in"] = False  # Logout after reset
+            st.rerun()
         else:
             st.error("❌ Passwords do not match!")
 
@@ -93,7 +91,7 @@ def dashboard():
         st.write("🔹 **View and manage your own tickets...**")
 
     st.sidebar.button("Logout", on_click=lambda: st.session_state.update({"logged_in": False, "email": None, "role": None}))
-    st.experimental_rerun()
+    st.rerun()  # Ensure logout updates session
 
 # 🔹 AUTHENTICATION LOGIC
 if not st.session_state["logged_in"]:
@@ -103,4 +101,3 @@ else:
         password_reset()
     else:
         dashboard()
-
