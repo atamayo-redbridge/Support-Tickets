@@ -4,7 +4,7 @@ import bcrypt
 from backend import get_user, update_password, create_user
 
 # Set Page Title & Layout
-st.set_page_config(page_title="IT Ticketing System", page_icon="🎫", layout="wide")
+st.set_page_config(page_title="IT Ticketing System", page_icon="🎫", layout="centered")
 
 # Authentication State
 if "logged_in" not in st.session_state:
@@ -16,10 +16,27 @@ if "logged_in" not in st.session_state:
 def login():
     st.markdown("<h1 style='text-align: center;'>🎫 IT Ticketing System</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center;'>Secure Login</h3>", unsafe_allow_html=True)
-    
-    # Center the login form
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
+
+    # Centered Container
+    login_container = st.container()
+    with login_container:
+        st.markdown(
+            """
+            <style>
+                div[data-testid="stHorizontalBlock"] { 
+                    justify-content: center; 
+                    align-items: center; 
+                }
+                div[data-testid="stBlockContainer"] {
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
         email = st.text_input("📧 Email", key="login_email")
         password = st.text_input("🔑 Password", type="password", key="login_password")
         login_button = st.button("Login")
@@ -39,20 +56,19 @@ def login():
 def password_reset():
     st.markdown("<h1 style='text-align: center;'>🔄 Reset Your Password</h1>", unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        new_password = st.text_input("🔑 Enter New Password", type="password", key="new_password")
-        confirm_password = st.text_input("🔑 Confirm New Password", type="password", key="confirm_password")
-        reset_button = st.button("Reset Password")
+    email = st.session_state["email"]
+    new_password = st.text_input("🔑 Enter New Password", type="password")
+    confirm_password = st.text_input("🔑 Confirm New Password", type="password")
+    reset_button = st.button("Reset Password")
 
-        if reset_button:
-            if new_password == confirm_password:
-                update_password(st.session_state["email"], new_password)
-                st.success("✅ Password Reset Successful! Please Login Again.")
-                st.session_state["logged_in"] = False
-                st.experimental_rerun()
-            else:
-                st.error("❌ Passwords do not match!")
+    if reset_button:
+        if new_password == confirm_password:
+            update_password(email, new_password)
+            st.success("✅ Password Reset Successful! Please Login Again.")
+            st.session_state["logged_in"] = False
+            st.experimental_rerun()
+        else:
+            st.error("❌ Passwords do not match!")
 
 # 🔹 DASHBOARD BASED ON ROLE
 def dashboard():
@@ -71,25 +87,10 @@ def dashboard():
             if st.button("Create User"):
                 result = create_user(first_name, last_name, email, role)
                 st.success(f"✅ {result['message']} Default Password: `{result['password']}`")
-        
-        elif menu == "📋 Manage Tickets":
-            st.header("📋 View & Manage All Tickets")
-            st.write("🔹 **Admin can see & update all tickets here...**")
-            # Add ticket management functionalities...
 
-        elif menu == "📊 Admin Dashboard":
-            st.header("📊 Ticket Statistics & Overview")
-            # Add dashboard metrics...
-
-    elif st.session_state["role"] == "co-admin":
-        st.header("🛠️ Co-Admin Ticket Dashboard")
-        st.write("🔹 **Co-Admins can manage certain tickets...**")
-        # Co-Admin functionalities...
-
-    else:
+    elif st.session_state["role"] == "user":
         st.header("🎟 My Tickets")
         st.write("🔹 **View and manage your own tickets...**")
-        # User-specific functionalities...
 
     st.sidebar.button("Logout", on_click=lambda: st.session_state.update({"logged_in": False, "email": None, "role": None}))
     st.experimental_rerun()
@@ -102,3 +103,4 @@ else:
         password_reset()
     else:
         dashboard()
+
