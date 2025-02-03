@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import sqlite3
 import bcrypt
 from backend import get_user, update_password, create_user
@@ -13,39 +12,47 @@ if "logged_in" not in st.session_state:
     st.session_state["email"] = None
     st.session_state["role"] = None
 
-# 🔹 LOGIN FORM
+# 🔹 CENTERED LOGIN FORM
 def login():
-    st.sidebar.title("🔐 Login")
-    email = st.sidebar.text_input("📧 Email")
-    password = st.sidebar.text_input("🔑 Password", type="password")
-    login_button = st.sidebar.button("Login")
+    st.markdown("<h1 style='text-align: center;'>🎫 IT Ticketing System</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Secure Login</h3>", unsafe_allow_html=True)
+    
+    # Center the login form
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        email = st.text_input("📧 Email", key="login_email")
+        password = st.text_input("🔑 Password", type="password", key="login_password")
+        login_button = st.button("Login")
 
-    if login_button:
-        user = get_user(email)
-        if user and bcrypt.checkpw(password.encode(), user[4].encode()):
-            st.session_state["logged_in"] = True
-            st.session_state["email"] = email
-            st.session_state["role"] = user[5]  # Role
-            st.session_state["must_reset"] = user[6]  # Password Reset Required
-            st.experimental_rerun()
-        else:
-            st.sidebar.error("Invalid email or password")
+        if login_button:
+            user = get_user(email)
+            if user and bcrypt.checkpw(password.encode(), user[4].encode()):
+                st.session_state["logged_in"] = True
+                st.session_state["email"] = email
+                st.session_state["role"] = user[5]  # Role
+                st.session_state["must_reset"] = user[6]  # Password Reset Required
+                st.experimental_rerun()
+            else:
+                st.error("❌ Invalid email or password")
 
 # 🔹 PASSWORD RESET FORM
 def password_reset():
-    st.subheader("🔄 Reset Your Password")
-    new_password = st.text_input("🔑 Enter New Password", type="password")
-    confirm_password = st.text_input("🔑 Confirm New Password", type="password")
-    reset_button = st.button("Reset Password")
+    st.markdown("<h1 style='text-align: center;'>🔄 Reset Your Password</h1>", unsafe_allow_html=True)
 
-    if reset_button:
-        if new_password == confirm_password:
-            update_password(st.session_state["email"], new_password)
-            st.success("✅ Password Reset Successful! Please Login Again.")
-            st.session_state["logged_in"] = False
-            st.experimental_rerun()
-        else:
-            st.error("Passwords do not match!")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        new_password = st.text_input("🔑 Enter New Password", type="password", key="new_password")
+        confirm_password = st.text_input("🔑 Confirm New Password", type="password", key="confirm_password")
+        reset_button = st.button("Reset Password")
+
+        if reset_button:
+            if new_password == confirm_password:
+                update_password(st.session_state["email"], new_password)
+                st.success("✅ Password Reset Successful! Please Login Again.")
+                st.session_state["logged_in"] = False
+                st.experimental_rerun()
+            else:
+                st.error("❌ Passwords do not match!")
 
 # 🔹 DASHBOARD BASED ON ROLE
 def dashboard():
