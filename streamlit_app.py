@@ -1,6 +1,3 @@
-from backend import init_db
-init_db()
-
 # 🔹 DASHBOARD BASED ON ROLE
 def dashboard():
     st.sidebar.title("🎫 IT Ticketing System")
@@ -51,3 +48,6 @@ def dashboard():
     if st.sidebar.button("Logout"):
         st.session_state.update({"logged_in": False, "email": None, "role": None})
         st.rerun()
+
+from backend import init_db
+init_db()
