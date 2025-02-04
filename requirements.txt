@@ -7,4 +7,4 @@ streamlit-authenticator
 bcrypt
 sqlalchemy
 passlib
-
+boto3
