@@ -1,85 +1,109 @@
 import sqlite3
 import bcrypt
-import random
-import string
-from passlib.context import CryptContext
 
-# Secure Password Hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 🔹 Initialize Database
+def init_db():
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
 
-# Database Connection
-conn = sqlite3.connect("users.db", check_same_thread=False)
-cursor = conn.cursor()
-
-# Create Users Table (If Not Exists)
-cursor.execute("""
+    # Users Table
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        first_name TEXT,
-        last_name TEXT,
-        email TEXT UNIQUE,
-        password TEXT,
-        role TEXT DEFAULT 'user',
-        must_reset_password INTEGER DEFAULT 1
+        first_name TEXT NOT NULL,
+        last_name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL,
+        role TEXT CHECK(role IN ('user', 'co-admin', 'admin')) NOT NULL DEFAULT 'user',
+        must_reset INTEGER DEFAULT 0
     )
-""")
-conn.commit()
+    """)
 
-# Generate Random Password
-def generate_password(length=10):
-    chars = string.ascii_letters + string.digits + "!@#$%^&*"
-    return ''.join(random.choice(chars) for _ in range(length))
-
-# Hash Password
-def hash_password(password):
-    return pwd_context.hash(password)
-
-# Validate Password
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-# Create New User (Admin Only)
-def create_user(first_name, last_name, email, role="user"):
-    password = generate_password()
-    hashed_password = hash_password(password)
+    # Tickets Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        status TEXT CHECK(status IN ('Open', 'In Progress', 'Closed')) NOT NULL DEFAULT 'Open',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(user_email) REFERENCES users(email) ON DELETE CASCADE
+    )
+    """)
     
+    conn.commit()
+    conn.close()
+
+# 🔹 Get User Data
+def get_user(email):
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email=?", (email,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+# 🔹 Create a New User
+def create_user(first_name, last_name, email, role):
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    
+    # Generate a default password
+    default_password = "Welcome123!"
+    hashed_password = bcrypt.hashpw(default_password.encode(), bcrypt.gensalt()).decode()
+
     try:
         cursor.execute(
-            "INSERT INTO users (first_name, last_name, email, password, role) VALUES (?, ?, ?, ?, ?)",
-            (first_name, last_name, email, hashed_password, role),
+            "INSERT INTO users (first_name, last_name, email, password, role, must_reset) VALUES (?, ?, ?, ?, ?, 1)",
+            (first_name, last_name, email, hashed_password, role)
         )
         conn.commit()
-        return {"email": email, "password": password, "message": "User created successfully!"}
+        return {"message": "User Created Successfully", "password": default_password}
     except sqlite3.IntegrityError:
-        return {"message": "Error: Email already exists!"}
+        return {"message": "Email already exists"}
+    finally:
+        conn.close()
 
-# Fetch User by Email
-def get_user(email):
-    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
-    return cursor.fetchone()
-
-# Update Password (After First Login)
+# 🔹 Update Password
 def update_password(email, new_password):
-    hashed_password = hash_password(new_password)
-    cursor.execute("UPDATE users SET password = ?, must_reset_password = 0 WHERE email = ?", (hashed_password, email))
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    hashed_password = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    cursor.execute("UPDATE users SET password=?, must_reset=0 WHERE email=?", (hashed_password, email))
     conn.commit()
-    return {"message": "Password updated successfully!"}
+    conn.close()
 
-# Ensure Default Admin Exists
-def create_default_admin():
-    admin_email = "admin@example.com"
-    admin_password = "Admin123!"  # Default Password
-    hashed_password = hash_password(admin_password)
+# 🔹 Create a Ticket
+def create_ticket(user_email, title, description):
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO tickets (user_email, title, description, status) VALUES (?, ?, ?, 'Open')",
+        (user_email, title, description)
+    )
+    conn.commit()
+    conn.close()
 
-    cursor.execute("SELECT * FROM users WHERE email = ?", (admin_email,))
-    if not cursor.fetchone():
-        cursor.execute(
-            "INSERT INTO users (first_name, last_name, email, password, role, must_reset_password) VALUES (?, ?, ?, ?, ?, ?)",
-            ("Admin", "User", admin_email, hashed_password, "admin", 0),
-        )
-        conn.commit()
-        print(f"✅ Default Admin Created: {admin_email} | Password: {admin_password}")
+# 🔹 Fetch Tickets
+def get_tickets(user_email, role):
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    if role == "admin":
+        cursor.execute("SELECT * FROM tickets")
+    else:
+        cursor.execute("SELECT * FROM tickets WHERE user_email=?", (user_email,))
+    tickets = cursor.fetchall()
+    conn.close()
+    return tickets
 
-# Run Admin Creation Check
-create_default_admin()
+# 🔹 Update Ticket Status
+def update_ticket_status(ticket_id, status):
+    conn = sqlite3.connect("tickets.db")
+    cursor = conn.cursor()
+    cursor.execute("UPDATE tickets SET status=?, updated_at=CURRENT_TIMESTAMP WHERE id=?", (status, ticket_id))
+    conn.commit()
+    conn.close()
+
 
