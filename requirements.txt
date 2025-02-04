@@ -1,3 +1,5 @@
+from backend import init_db
+init_db()
 streamlit
 pandas
 numpy
