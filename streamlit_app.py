@@ -1,3 +1,6 @@
+from backend import init_db
+init_db()
+
 # 🔹 DASHBOARD BASED ON ROLE
 def dashboard():
     st.sidebar.title("🎫 IT Ticketing System")
